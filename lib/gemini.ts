@@ -1,7 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { LabelFields } from './types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error('GEMINI_API_KEY environment variable is not set');
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const EXTRACTION_PROMPT = `
 Extract the following information from this alcohol label image and return it as a JSON object with these exact fields:
@@ -19,7 +23,7 @@ Return ONLY a valid JSON object. Do not include any explanatory text before or a
 export async function extractLabelFields(imageBase64: string): Promise<LabelFields> {
   try {
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
       }
@@ -40,6 +44,10 @@ export async function extractLabelFields(imageBase64: string): Promise<LabelFiel
     return parsedData as LabelFields;
   } catch (error) {
     console.error('Error extracting label fields:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     throw new Error('Failed to extract data from label image');
   }
 }
