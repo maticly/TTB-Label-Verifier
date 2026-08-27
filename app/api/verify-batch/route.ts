@@ -10,6 +10,23 @@ interface BatchItem {
   error?: string;
 }
 
+// Helper function to normalize filename for matching
+const normalizeFilename = (filename: string): string => {
+  return filename.trim().toLowerCase();
+};
+
+// Helper function to check if two filenames match (case-insensitive, extension-agnostic)
+const filenamesMatch = (csvFilename: string, uploadedFilename: string): boolean => {
+  const normalizedCsv = normalizeFilename(csvFilename);
+  const normalizedUploaded = normalizeFilename(uploadedFilename);
+  
+  // Remove extension from both for comparison
+  const csvBase = normalizedCsv.replace(/\.[^/.]+$/, '');
+  const uploadedBase = normalizedUploaded.replace(/\.[^/.]+$/, '');
+  
+  return csvBase === uploadedBase;
+};
+
 // Application data is matched by filename from the uploaded CSV
 // The client sends a Map of filename to ApplicationData as a JSON stringified array of entries
 
@@ -77,8 +94,15 @@ export async function POST(request: NextRequest) {
         const item: BatchItem = { fileName: file.name };
         
         try {
-          // Get application data for this file by filename
-          const appData = appDataMap.get(file.name);
+          // Get application data for this file by filename (case-insensitive, extension-agnostic)
+          let appData: ApplicationData | undefined;
+          for (const [csvFilename, data] of appDataMap.entries()) {
+            if (filenamesMatch(csvFilename, file.name)) {
+              appData = data;
+              break;
+            }
+          }
+          
           if (!appData) {
             throw new Error(`No application data found for file "${file.name}"`);
           }

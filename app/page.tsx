@@ -52,13 +52,34 @@ export default function Home() {
 
   const downloadCsvTemplate = () => {
     const headers = ['filename', 'brandName', 'classType', 'alcoholContent', 'netContents', 'governmentWarningText', 'governmentWarningFormatted'];
-    const exampleRow = ['label1.jpg', 'Example Brand', 'Table Wine', '13.5% ALCOHOL BY VOLUME', '750 mL', '', 'false'];
-    const csvContent = [headers, exampleRow].map(row => row.join(',')).join('\n');
+    const exampleRows = [
+      ['label1.jpg', 'Example Brand', 'Table Wine', '13.5% ALCOHOL BY VOLUME', '750 mL', '', 'false'],
+      ['label2.jpg', 'Another Brand', 'Distilled Spirits', '40% ALCOHOL BY VOLUME', '1 L', '', 'false'],
+      ['label3.jpg', 'Third Brand', 'Malt Beverage', '5.0% ALCOHOL BY VOLUME', '12 oz', '', 'false'],
+    ];
+    const csvContent = [headers, ...exampleRows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = 'batch_template.csv';
     link.click();
+  };
+
+  // Helper function to normalize filename for matching
+  const normalizeFilename = (filename: string): string => {
+    return filename.trim().toLowerCase();
+  };
+
+  // Helper function to check if two filenames match (case-insensitive, extension-agnostic)
+  const filenamesMatch = (csvFilename: string, uploadedFilename: string): boolean => {
+    const normalizedCsv = normalizeFilename(csvFilename);
+    const normalizedUploaded = normalizeFilename(uploadedFilename);
+    
+    // Remove extension from both for comparison
+    const csvBase = normalizedCsv.replace(/\.[^/.]+$/, '');
+    const uploadedBase = normalizedUploaded.replace(/\.[^/.]+$/, '');
+    
+    return csvBase === uploadedBase;
   };
 
   const handleVerify = async () => {
@@ -151,13 +172,14 @@ export default function Home() {
         }
       }
 
-      // Match filenames to uploaded files
-      const uploadedFileNames = new Set(batchFiles.map(f => f.name));
+      // Match filenames to uploaded files (case-insensitive, extension-agnostic)
       const unmatchedFilenames: string[] = [];
       
       rows.forEach(row => {
-        if (!uploadedFileNames.has(row.filename)) {
-          unmatchedFilenames.push(row.filename);
+        const csvFilename = row.filename.trim();
+        const hasMatch = batchFiles.some(file => filenamesMatch(csvFilename, file.name));
+        if (!hasMatch) {
+          unmatchedFilenames.push(csvFilename);
         }
       });
 
