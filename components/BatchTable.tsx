@@ -101,7 +101,7 @@ export default function BatchTable({ items }: BatchTableProps) {
                     {item.result && (
                       <button
                         onClick={() => toggleRow(index)}
-                        className="text-blue-600 hover:text-blue-800 text-base font-medium"
+                        className="text-primary-600 hover:text-primary-800 text-base font-medium"
                       >
                         {expandedRows.has(index) ? 'Hide Details' : 'Show Details'}
                       </button>

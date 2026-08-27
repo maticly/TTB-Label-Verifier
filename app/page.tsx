@@ -158,7 +158,7 @@ export default function Home() {
             onClick={() => setMode('single')}
             className={`px-6 py-3 rounded-xl text-lg font-semibold transition-colors ${
               mode === 'single'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
             }`}
           >
@@ -168,7 +168,7 @@ export default function Home() {
             onClick={() => setMode('batch')}
             className={`px-6 py-3 rounded-xl text-lg font-semibold transition-colors ${
               mode === 'batch'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-primary-600 text-white'
                 : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
             }`}
           >
@@ -200,7 +200,7 @@ export default function Home() {
               <button
                 onClick={handleVerify}
                 disabled={isProcessing || !selectedFile}
-                className="w-full bg-blue-600 text-white py-4 px-8 rounded-xl text-xl font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-md"
+                className="w-full bg-primary-600 text-white py-4 px-8 rounded-xl text-xl font-semibold hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-md"
               >
                 {isProcessing ? 'Verifying...' : 'Verify Label'}
               </button>
@@ -218,7 +218,7 @@ export default function Home() {
             <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">Upload Label Images</h2>
               
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 hover:bg-primary-50 transition-colors">
                 <input
                   type="file"
                   accept="image/*"
@@ -232,9 +232,9 @@ export default function Home() {
                   htmlFor="batch-file-upload"
                   className="cursor-pointer flex flex-col items-center gap-3"
                 >
-                  <div className="p-4 rounded-full bg-blue-100">
+                  <div className="p-4 rounded-full bg-primary-100">
                     <svg
-                      className="w-12 h-12 text-blue-600"
+                      className="w-12 h-12 text-primary-600"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -301,7 +301,7 @@ export default function Home() {
               <button
                 onClick={handleBatchVerify}
                 disabled={isProcessing || batchFiles.length === 0}
-                className="w-full bg-blue-600 text-white py-4 px-8 rounded-xl text-xl font-semibold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-md"
+                className="w-full bg-primary-600 text-white py-4 px-8 rounded-xl text-xl font-semibold hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-md"
               >
                 {isProcessing ? 'Processing Batch...' : 'Verify All Labels'}
               </button>
@@ -324,9 +324,9 @@ export default function Home() {
 
         {/* Loading State */}
         {isProcessing && (
-          <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-8 text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent mb-4"></div>
-            <p className="text-lg text-blue-800">
+          <div className="bg-primary-50 border-2 border-primary-300 rounded-xl p-8 text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary-600 border-t-transparent mb-4"></div>
+            <p className="text-lg text-primary-800">
               {mode === 'single' 
                 ? 'Analyzing label image... This usually takes less than 5 seconds.'
                 : `Processing batch... Processing up to 6 labels at a time to avoid rate limits.`

@@ -79,7 +79,7 @@ export default function UploadZone({ onFileSelect, disabled = false }: UploadZon
           className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
             disabled
               ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
-              : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 cursor-pointer'
+              : 'border-gray-300 hover:border-primary-500 hover:bg-primary-50 cursor-pointer'
           }`}
         >
           <input
@@ -94,9 +94,9 @@ export default function UploadZone({ onFileSelect, disabled = false }: UploadZon
             htmlFor="file-upload"
             className={`flex flex-col items-center gap-4 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            <div className={`p-4 rounded-full ${disabled ? 'bg-gray-200' : 'bg-blue-100'}`}>
+            <div className={`p-4 rounded-full ${disabled ? 'bg-gray-200' : 'bg-primary-100'}`}>
               <svg
-                className="w-12 h-12 text-blue-600"
+                className="w-12 h-12 text-primary-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

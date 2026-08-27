@@ -25,7 +25,7 @@ export default function ApplicationForm({ data, onChange, disabled = false }: Ap
           value={data.brandName}
           onChange={(e) => handleChange('brandName', e.target.value)}
           disabled={disabled}
-          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder="Enter the brand name"
         />
       </div>
@@ -40,7 +40,7 @@ export default function ApplicationForm({ data, onChange, disabled = false }: Ap
           value={data.classType}
           onChange={(e) => handleChange('classType', e.target.value)}
           disabled={disabled}
-          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder="e.g., Table Wine, Distilled Spirits"
         />
       </div>
@@ -55,7 +55,7 @@ export default function ApplicationForm({ data, onChange, disabled = false }: Ap
           value={data.alcoholContent}
           onChange={(e) => handleChange('alcoholContent', e.target.value)}
           disabled={disabled}
-          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder="e.g., 13.5% ALCOHOL BY VOLUME"
         />
       </div>
@@ -70,7 +70,7 @@ export default function ApplicationForm({ data, onChange, disabled = false }: Ap
           value={data.netContents}
           onChange={(e) => handleChange('netContents', e.target.value)}
           disabled={disabled}
-          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          className="w-full px-4 py-3 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           placeholder="e.g., 750 mL"
         />
       </div>
