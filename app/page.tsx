@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Papa from 'papaparse';
 import ApplicationForm from '@/components/ApplicationForm';
 import UploadZone from '@/components/UploadZone';
 import ResultCard from '@/components/ResultCard';
@@ -11,6 +12,16 @@ interface BatchItem {
   fileName: string;
   result?: VerificationResult;
   error?: string;
+}
+
+interface CSVRow {
+  filename: string;
+  brandName: string;
+  classType: string;
+  alcoholContent: string;
+  netContents: string;
+  governmentWarningText: string;
+  governmentWarningFormatted: string;
 }
 
 export default function Home() {
@@ -31,13 +42,24 @@ export default function Home() {
   
   // Batch mode state
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
-  const [batchApplicationData, setBatchApplicationData] = useState<string>('');
+  const [batchCsvFile, setBatchCsvFile] = useState<File | null>(null);
   const [batchResults, setBatchResults] = useState<BatchItem[]>([]);
   const [batchProgress, setBatchProgress] = useState({ completed: 0, total: 0 });
   
   // Shared state
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const downloadCsvTemplate = () => {
+    const headers = ['filename', 'brandName', 'classType', 'alcoholContent', 'netContents', 'governmentWarningText', 'governmentWarningFormatted'];
+    const exampleRow = ['label1.jpg', 'Example Brand', 'Table Wine', '13.5% ALCOHOL BY VOLUME', '750 mL', '', 'false'];
+    const csvContent = [headers, exampleRow].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'batch_template.csv';
+    link.click();
+  };
 
   const handleVerify = async () => {
     if (!selectedFile) {
@@ -90,22 +112,8 @@ export default function Home() {
       return;
     }
 
-    if (!batchApplicationData.trim()) {
-      setError('Please provide the application data as a JSON array');
-      return;
-    }
-
-    let applicationDataArray: ApplicationData[];
-    try {
-      applicationDataArray = JSON.parse(batchApplicationData);
-      if (!Array.isArray(applicationDataArray)) {
-        throw new Error('Application data must be an array');
-      }
-      if (applicationDataArray.length !== batchFiles.length) {
-        throw new Error(`Number of application data entries (${applicationDataArray.length}) must match number of files (${batchFiles.length})`);
-      }
-    } catch (parseError) {
-      setError('Invalid JSON format. Please provide a valid JSON array of application data.');
+    if (!batchCsvFile) {
+      setError('Please upload a CSV file with application data');
       return;
     }
 
@@ -115,11 +123,77 @@ export default function Home() {
     setBatchProgress({ completed: 0, total: batchFiles.length });
 
     try {
+      // Parse CSV file
+      const csvText = await batchCsvFile.text();
+      const parseResult = Papa.parse<CSVRow>(csvText, {
+        header: true,
+        skipEmptyLines: true,
+      });
+
+      if (parseResult.errors.length > 0) {
+        throw new Error(`CSV parsing error: ${parseResult.errors[0].message}`);
+      }
+
+      const rows = parseResult.data;
+      
+      // Validate required columns
+      const requiredColumns = ['filename', 'brandName', 'classType', 'alcoholContent', 'netContents'];
+      const missingColumns = requiredColumns.filter(col => !rows[0] || !(col in rows[0]));
+      if (missingColumns.length > 0) {
+        throw new Error(`CSV is missing required columns: ${missingColumns.join(', ')}`);
+      }
+
+      // Validate each row has required fields
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row.filename || !row.brandName || !row.classType || !row.alcoholContent || !row.netContents) {
+          throw new Error(`Row ${i + 1} is missing required fields (filename, brandName, classType, alcoholContent, netContents)`);
+        }
+      }
+
+      // Match filenames to uploaded files
+      const uploadedFileNames = new Set(batchFiles.map(f => f.name));
+      const unmatchedFilenames: string[] = [];
+      
+      rows.forEach(row => {
+        if (!uploadedFileNames.has(row.filename)) {
+          unmatchedFilenames.push(row.filename);
+        }
+      });
+
+      if (unmatchedFilenames.length > 0) {
+        throw new Error(`The following filenames in the CSV do not match any uploaded image: ${unmatchedFilenames.join(', ')}`);
+      }
+
+      // Convert CSV rows to ApplicationData array
+      const applicationDataArray: ApplicationData[] = rows.map(row => ({
+        brandName: row.brandName,
+        classType: row.classType,
+        alcoholContent: row.alcoholContent,
+        netContents: row.netContents,
+        governmentWarningText: row.governmentWarningText || '',
+        governmentWarningFormatted: row.governmentWarningFormatted === 'true',
+      }));
+
+      // Create filename to application data mapping
+      const appDataMap = new Map<string, ApplicationData>();
+      rows.forEach(row => {
+        appDataMap.set(row.filename, {
+          brandName: row.brandName,
+          classType: row.classType,
+          alcoholContent: row.alcoholContent,
+          netContents: row.netContents,
+          governmentWarningText: row.governmentWarningText || '',
+          governmentWarningFormatted: row.governmentWarningFormatted === 'true',
+        });
+      });
+
+      // Prepare form data with images and application data
       const formData = new FormData();
       batchFiles.forEach((file) => {
         formData.append('images', file);
       });
-      formData.append('applicationData', batchApplicationData);
+      formData.append('applicationData', JSON.stringify(Array.from(appDataMap.entries())));
 
       const response = await fetch('/api/verify-batch', {
         method: 'POST',
@@ -216,7 +290,15 @@ export default function Home() {
           <>
             {/* Batch Mode */}
             <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
-              <h2 className="text-2xl font-semibold text-gray-800 mb-6">Upload Label Images</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-semibold text-gray-800">Upload Label Images</h2>
+                <button
+                  onClick={downloadCsvTemplate}
+                  className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200 text-base font-medium transition-colors"
+                >
+                  Download CSV Template
+                </button>
+              </div>
               
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 hover:bg-primary-50 transition-colors">
                 <input
@@ -273,34 +355,64 @@ export default function Home() {
 
             <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
               <h2 className="text-2xl font-semibold text-gray-800 mb-6">
-                Application Data (JSON Array)
+                Upload Application Data (CSV)
               </h2>
               <p className="text-base text-gray-600 mb-4">
-                Paste a JSON array of application data. The order must match the uploaded files.
+                Upload a CSV file with application data. The filename column must match your uploaded image files.
               </p>
-              <textarea
-                value={batchApplicationData}
-                onChange={(e) => setBatchApplicationData(e.target.value)}
-                disabled={isProcessing}
-                className="w-full px-4 py-3 text-base border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed font-mono"
-                rows={8}
-                placeholder={`[
-  {
-    "brandName": "Example Brand",
-    "classType": "Table Wine",
-    "alcoholContent": "13.5% ALCOHOL BY VOLUME",
-    "netContents": "750 mL",
-    "governmentWarningText": "",
-    "governmentWarningFormatted": false
-  }
-]`}
-              />
+              
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary-500 hover:bg-primary-50 transition-colors">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={(e) => setBatchCsvFile(e.target.files?.[0] || null)}
+                  disabled={isProcessing}
+                  className="hidden"
+                  id="csv-upload"
+                />
+                <label
+                  htmlFor="csv-upload"
+                  className="cursor-pointer flex flex-col items-center gap-3"
+                >
+                  <div className="p-4 rounded-full bg-primary-100">
+                    <svg
+                      className="w-12 h-12 text-primary-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xl font-medium text-gray-700">
+                      Click to upload CSV file
+                    </p>
+                    <p className="text-lg text-gray-500 mt-2">
+                      {batchCsvFile ? batchCsvFile.name : 'Download the template above and fill it with your data'}
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {batchCsvFile && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <p className="text-base text-gray-600">
+                    CSV file: <span className="font-medium">{batchCsvFile.name}</span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mb-6">
               <button
                 onClick={handleBatchVerify}
-                disabled={isProcessing || batchFiles.length === 0}
+                disabled={isProcessing || batchFiles.length === 0 || !batchCsvFile}
                 className="w-full bg-primary-600 text-white py-4 px-8 rounded-xl text-xl font-semibold hover:bg-primary-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors shadow-md"
               >
                 {isProcessing ? 'Processing Batch...' : 'Verify All Labels'}
