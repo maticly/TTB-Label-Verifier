@@ -47,7 +47,32 @@ export async function POST(request: NextRequest) {
     try {
       extractedFields = await extractLabelFields(base64Image);
     } catch (geminiError) {
+      console.error('=== API ROUTE GEMINI ERROR ===');
       console.error('Gemini API call failed:', geminiError);
+      console.error('Gemini error type:', geminiError?.constructor?.name);
+      
+      if (geminiError instanceof Error) {
+        console.error('Gemini error message:', geminiError.message);
+        console.error('Gemini error stack:', geminiError.stack);
+      }
+      
+      // Check for response object in error
+      if (geminiError && typeof geminiError === 'object' && 'response' in geminiError) {
+        console.error('Gemini error response:', (geminiError as any).response);
+        console.error('Gemini error response status:', (geminiError as any).response?.status);
+        console.error('Gemini error response statusText:', (geminiError as any).response?.statusText);
+      }
+      
+      // Check for status code directly
+      if (geminiError && typeof geminiError === 'object' && 'status' in geminiError) {
+        console.error('Gemini error status:', (geminiError as any).status);
+      }
+      
+      // Check for any other properties
+      if (geminiError && typeof geminiError === 'object') {
+        console.error('Gemini error properties:', Object.keys(geminiError));
+      }
+      
       return NextResponse.json(
         { error: 'Failed to extract label data from image. Please ensure the image is clear and contains a valid alcohol label.' },
         { status: 500 }

@@ -1,53 +1,43 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// lib/gemini.ts
 import { LabelFields } from './types';
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is not set');
-}
+const MODEL_NAME = 'gemini-3.1-flash-lite';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const EXTRACTION_PROMPT = `
-Extract the following information from this alcohol label image and return it as a JSON object with these exact fields:
-
-- brandName: The brand name of the product
-- classType: The class/type designation (e.g., "Table Wine", "Distilled Spirits", "Malt Beverage")
-- alcoholContent: The alcohol content statement (e.g., "13.5% ALCOHOL BY VOLUME")
-- netContents: The net contents statement (e.g., "750 mL")
-- governmentWarningText: The full government warning text exactly as it appears on the label
-- governmentWarningFormatted: A boolean indicating whether "GOVERNMENT WARNING:" appears in bold and all capital letters
-
-Return ONLY a valid JSON object. Do not include any explanatory text before or after the JSON.
-`;
+const EXTRACTION_PROMPT = `Extract these fields from this alcohol label image and return ONLY a JSON object with this exact shape, no other text:
+{
+  "brandName": string,
+  "classType": string,
+  "alcoholContent": string,
+  "netContents": string,
+  "governmentWarningText": string (the full warning text verbatim),
+  "governmentWarningFormatted": boolean (true only if "GOVERNMENT WARNING:" appears in bold and ALL CAPS)
+}`;
 
 export async function extractLabelFields(imageBase64: string): Promise<LabelFields> {
-  try {
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      }
-    });
+  const apiKey = process.env.GEMINI_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    const imageData = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: 'image/jpeg',
-      },
-    };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{
+        parts: [
+          { text: EXTRACTION_PROMPT },
+          { inline_data: { mime_type: 'image/jpeg', data: imageBase64 } },
+        ],
+      }],
+      generationConfig: { responseMimeType: 'application/json' },
+    }),
+  });
 
-    const result = await model.generateContent([EXTRACTION_PROMPT, imageData]);
-    const response = await result.response;
-    const text = response.text();
-    
-    const parsedData = JSON.parse(text);
-    return parsedData as LabelFields;
-  } catch (error) {
-    console.error('Error extracting label fields:', error);
-    if (error instanceof Error) {
-      console.error('Error details:', error.message);
-      console.error('Error stack:', error.stack);
-    }
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('=== GEMINI API ERROR ===', res.status, errText);
     throw new Error('Failed to extract data from label image');
   }
+
+  const data = await res.json();
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  return JSON.parse(text) as LabelFields;
 }

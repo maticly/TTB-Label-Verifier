@@ -1,12 +1,14 @@
 import { LabelFields, ApplicationData, VerificationResult, FieldVerification } from './types';
 import { distance } from 'fastest-levenshtein';
 
-// Canonical TTB government warning text - must match exactly
+// TTB government warning text - must match exactly
 const CANONICAL_GOVERNMENT_WARNING = `GOVERNMENT WARNING: (1) ACCORDING TO THE SURGEON GENERAL, WOMEN SHOULD NOT DRINK ALCOHOLIC BEVERAGES DURING PREGNANCY BECAUSE OF THE RISK OF BIRTH DEFECTS. (2) CONSUMPTION OF ALCOHOLIC BEVERAGES IMPAIRS YOUR ABILITY TO DRIVE A CAR OR OPERATE MACHINERY, AND MAY CAUSE HEALTH PROBLEMS.`;
 
 /**
- * Normalize string for fuzzy matching: lowercase, trim, collapse whitespace, strip punctuation
- * This allows minor formatting differences while catching substantive differences
+ * Normalize string for fuzzy matching: lowercase, trim, collapse whitespace, strip punctuation.
+ * This is what already makes brandName/classType/netContents tolerant of case, periods, and spacing —
+ * it strips anything that isn't a letter, digit, or whitespace, so "Stone's Throw." and
+ * "STONE'S  THROW" both normalize down to "stones throw".
  */
 function normalizeForFuzzyMatch(str: string): string {
   return str
@@ -17,8 +19,8 @@ function normalizeForFuzzyMatch(str: string): string {
 }
 
 /**
- * Calculate string similarity score using Levenshtein distance
- * Returns a value between 0 (no similarity) and 1 (identical)
+ * Calculate string similarity score using Levenshtein distance.
+ * Returns a value between 0 (no similarity) and 1 (identical).
  */
 function calculateSimilarity(str1: string, str2: string): number {
   const maxLen = Math.max(str1.length, str2.length);
@@ -28,75 +30,99 @@ function calculateSimilarity(str1: string, str2: string): number {
 }
 
 /**
- * Normalize alcohol content for exact comparison
- * Strips whitespace and unifies % and "percent" representations
- * This is a regulated number and must match exactly
+ * Run the standard fuzzy-match check used by brandName, classType, and netContents.
+ * Always returns a reason that shows both the extracted and expected raw values,
+ * whether it passed or failed, so the UI never has to guess what was compared.
  */
-function normalizeAlcoholContent(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/%/g, 'percent')
-    .replace(/percent/g, '%');
+function fuzzyFieldCheck(fieldLabel: string, extractedRaw: string, applicationRaw: string): FieldVerification {
+  const normExtracted = normalizeForFuzzyMatch(extractedRaw);
+  const normApplication = normalizeForFuzzyMatch(applicationRaw);
+  const similarity = calculateSimilarity(normExtracted, normApplication);
+  const exact = normExtracted === normApplication;
+  const pass = exact || similarity > 0.9;
+
+  const reason = pass
+    ? exact
+      ? `${fieldLabel} matches exactly (extracted: "${extractedRaw}", input: "${applicationRaw}")`
+      : `${fieldLabel} matches (minor formatting difference only — extracted: "${extractedRaw}", input: "${applicationRaw}")`
+    : `${fieldLabel} does not match (extracted: "${extractedRaw}", input: "${applicationRaw}", similarity: ${(similarity * 100).toFixed(1)}%)`;
+
+  return { pass, reason };
 }
 
 /**
- * Compare extracted label fields against application data
- * Returns verification results with per-field pass/fail and reasons
+ * Extract just the numeric percentage value from an alcohol content string,
+ * ignoring case, punctuation, spacing, and suffix text like "Alc./Vol.",
+ * "ALCOHOL BY VOLUME", or a parenthetical proof value.
+ * "46% alc./vol." -> 46, "13.5% ALCOHOL BY VOLUME" -> 13.5, "45% Alc./Vol. (90 Proof)" -> 45
+ * Returns null if no percentage number could be found at all.
+ */
+function extractAbvPercent(str: string): number | null {
+  const match = str.match(/(\d+(?:\.\d+)?)\s*%/);
+  if (!match) return null;
+  return parseFloat(match[1]);
+}
+
+/**
+ * Alcohol content: tolerant of case, punctuation, and spacing (same spirit as the fuzzy
+ * fields), but still an exact match on the actual regulated number — a genuinely different
+ * percentage must still fail. We do this by extracting just the numeric percentage from
+ * each string and comparing those numbers directly, rather than comparing the raw strings.
+ */
+function alcoholContentCheck(extractedRaw: string, applicationRaw: string): FieldVerification {
+  const extractedPct = extractAbvPercent(extractedRaw);
+  const applicationPct = extractAbvPercent(applicationRaw);
+
+  if (extractedPct === null || applicationPct === null) {
+    // Couldn't find a parseable percentage in one or both strings — fall back to a plain
+    // normalized string comparison so we still produce a sensible result instead of crashing.
+    const normExtracted = normalizeForFuzzyMatch(extractedRaw);
+    const normApplication = normalizeForFuzzyMatch(applicationRaw);
+    const pass = normExtracted === normApplication;
+    return {
+      pass,
+      reason: pass
+        ? `Alcohol content matches (extracted: "${extractedRaw}", input: "${applicationRaw}")`
+        : `Could not parse a percentage from alcohol content — compared as text (extracted: "${extractedRaw}", input: "${applicationRaw}")`,
+    };
+  }
+
+  const pass = extractedPct === applicationPct;
+  return {
+    pass,
+    reason: pass
+      ? `Alcohol content matches exactly (extracted: "${extractedRaw}", input: "${applicationRaw}")`
+      : `Alcohol content does not match exactly (extracted: "${extractedRaw}" = ${extractedPct}%, input: "${applicationRaw}" = ${applicationPct}%)`,
+  };
+}
+
+/**
+ * Compare extracted label fields against application data.
+ * Returns verification results with per-field pass/fail and reasons.
  */
 export function compareFields(extracted: LabelFields, application: ApplicationData): VerificationResult {
-  // Brand name: fuzzy match - allows minor formatting differences
-  // Example: "STONE'S THROW" and "Stone's Throw" should pass
-  const brandNameNormalizedExtracted = normalizeForFuzzyMatch(extracted.brandName);
-  const brandNameNormalizedApplication = normalizeForFuzzyMatch(application.brandName);
-  const brandNameSimilarity = calculateSimilarity(brandNameNormalizedExtracted, brandNameNormalizedApplication);
-  const brandNamePass = brandNameNormalizedExtracted === brandNameNormalizedApplication || brandNameSimilarity > 0.9;
-  const brandNameReason = brandNamePass
-    ? brandNameNormalizedExtracted === brandNameNormalizedApplication
-      ? 'Brand name matches exactly'
-      : 'Brand name matches (minor formatting difference only)'
-    : `Brand name does not match (similarity: ${(brandNameSimilarity * 100).toFixed(1)}%)`;
+  // Brand name: fuzzy match — tolerant of case, punctuation, and spacing differences.
+  // Example: "STONE'S THROW" and "Stone's Throw." both pass.
+  const brandNameResult = fuzzyFieldCheck('Brand name', extracted.brandName, application.brandName);
 
-  // Class type: fuzzy match - allows minor formatting differences
-  // Example: "TABLE WINE" and "Table Wine" should pass
-  const classTypeNormalizedExtracted = normalizeForFuzzyMatch(extracted.classType);
-  const classTypeNormalizedApplication = normalizeForFuzzyMatch(application.classType);
-  const classTypeSimilarity = calculateSimilarity(classTypeNormalizedExtracted, classTypeNormalizedApplication);
-  const classTypePass = classTypeNormalizedExtracted === classTypeNormalizedApplication || classTypeSimilarity > 0.9;
-  const classTypeReason = classTypePass
-    ? classTypeNormalizedExtracted === classTypeNormalizedApplication
-      ? 'Class/type matches exactly'
-      : 'Class/type matches (minor formatting difference only)'
-    : `Class/type does not match (similarity: ${(classTypeSimilarity * 100).toFixed(1)}%)`;
+  // Class/type: same tolerant fuzzy match as brand name.
+  // Example: "Irish Whiskey" and "IRISH WHISKEY " both pass.
+  const classTypeResult = fuzzyFieldCheck('Class/type', extracted.classType, application.classType);
 
-  // Alcohol content: exact match after normalization
-  // This is a regulated number and should not fuzzy-match
-  const alcoholContentNormalizedExtracted = normalizeAlcoholContent(extracted.alcoholContent);
-  const alcoholContentNormalizedApplication = normalizeAlcoholContent(application.alcoholContent);
-  const alcoholContentPass = alcoholContentNormalizedExtracted === alcoholContentNormalizedApplication;
-  const alcoholContentReason = alcoholContentPass
-    ? 'Alcohol content matches exactly'
-    : `Alcohol content does not match exactly (extracted: "${extracted.alcoholContent}", expected: "${application.alcoholContent}")`;
+  // Net contents: same tolerant fuzzy match.
+  // Example: "750 ML" and "750ml" both pass.
+  const netContentsResult = fuzzyFieldCheck('Net contents', extracted.netContents, application.netContents);
 
-  // Net contents: fuzzy match - allows minor formatting differences
-  // Example: "750 ML" and "750ml" should pass
-  const netContentsNormalizedExtracted = normalizeForFuzzyMatch(extracted.netContents);
-  const netContentsNormalizedApplication = normalizeForFuzzyMatch(application.netContents);
-  const netContentsSimilarity = calculateSimilarity(netContentsNormalizedExtracted, netContentsNormalizedApplication);
-  const netContentsPass = netContentsNormalizedExtracted === netContentsNormalizedApplication || netContentsSimilarity > 0.9;
-  const netContentsReason = netContentsPass
-    ? netContentsNormalizedExtracted === netContentsNormalizedApplication
-      ? 'Net contents matches exactly'
-      : 'Net contents matches (minor formatting difference only)'
-    : `Net contents does not match (similarity: ${(netContentsSimilarity * 100).toFixed(1)}%)`;
+  // Alcohol content: tolerant of case/punctuation/spacing like the fields above, but
+  // compared as the actual regulated number so a real percentage difference still fails.
+  const alcoholContentResult = alcoholContentCheck(extracted.alcoholContent, application.alcoholContent);
 
-  // Government warning text: EXACT match, case-sensitive, no normalization
-  // Also fail if governmentWarningFormatted is false (not bold and all-caps)
+  // Government warning text: EXACT match, case-sensitive, no normalization — unchanged.
   const warningTextPass = extracted.governmentWarningText === CANONICAL_GOVERNMENT_WARNING;
   const warningFormattedPass = extracted.governmentWarningFormatted === true;
   const warningPass = warningTextPass && warningFormattedPass;
   let warningReason = '';
-  
+
   if (!warningFormattedPass) {
     warningReason = 'Government warning is not formatted correctly (not bold and all-caps)';
   } else if (!warningTextPass) {
@@ -106,13 +132,23 @@ export function compareFields(extracted: LabelFields, application: ApplicationDa
   }
 
   const result: VerificationResult = {
-    brandName: { pass: brandNamePass, reason: brandNameReason },
-    classType: { pass: classTypePass, reason: classTypeReason },
-    alcoholContent: { pass: alcoholContentPass, reason: alcoholContentReason },
-    netContents: { pass: netContentsPass, reason: netContentsReason },
+    brandName: brandNameResult,
+    classType: classTypeResult,
+    alcoholContent: alcoholContentResult,
+    netContents: netContentsResult,
     governmentWarningText: { pass: warningPass, reason: warningReason },
-    governmentWarningFormatted: { pass: warningFormattedPass, reason: warningFormattedPass ? 'Government warning is properly formatted (bold and all-caps)' : 'Government warning is not properly formatted (not bold and all-caps)' },
-    overallPass: brandNamePass && classTypePass && alcoholContentPass && netContentsPass && warningPass,
+    governmentWarningFormatted: {
+      pass: warningFormattedPass,
+      reason: warningFormattedPass
+        ? 'Government warning is properly formatted (bold and all-caps)'
+        : 'Government warning is not properly formatted (not bold and all-caps)',
+    },
+    overallPass:
+      brandNameResult.pass &&
+      classTypeResult.pass &&
+      alcoholContentResult.pass &&
+      netContentsResult.pass &&
+      warningPass,
   };
 
   return result;
@@ -120,25 +156,20 @@ export function compareFields(extracted: LabelFields, application: ApplicationDa
 
 /*
  * Example test cases (for verification by reading):
- * 
- * Case 1: STONE'S THROW brand name should pass
- * extracted = { brandName: "STONE'S THROW", ... }
- * application = { brandName: "Stone's Throw", ... }
- * Result: brandName.pass = true, reason = "Brand name matches (minor formatting difference only)"
- * 
- * Case 2: Government warning mismatch should fail
- * extracted = { governmentWarningText: "GOVERNMENT WARNING: (1) ACCORDING TO THE SURGEON GENERAL...", governmentWarningFormatted: true, ... }
- * application = { governmentWarningText: "GOVERNMENT WARNING: (1) ACCORDING TO THE SURGEON GENERAL...", governmentWarningFormatted: true, ... }
- * If extracted.governmentWarningText differs by even one character from CANONICAL_GOVERNMENT_WARNING:
- * Result: governmentWarningText.pass = false, reason = "Government warning text does not match exactly — see highlighted difference"
- * 
- * Case 3: Alcohol content exact match required
- * extracted = { alcoholContent: "13.5% ALCOHOL BY VOLUME", ... }
- * application = { alcoholContent: "13.5% ALCOHOL BY VOLUME", ... }
- * Result: alcoholContent.pass = true, reason = "Alcohol content matches exactly"
- * 
- * Case 4: Alcohol content mismatch should fail
- * extracted = { alcoholContent: "13.5% ALCOHOL BY VOLUME", ... }
- * application = { alcoholContent: "14.0% ALCOHOL BY VOLUME", ... }
- * Result: alcoholContent.pass = false, reason = "Alcohol content does not match exactly (extracted: "13.5% ALCOHOL BY VOLUME", expected: "14.0% ALCOHOL BY VOLUME")"
+ *
+ * Case 1: Brand name — case/punctuation/spacing differences should pass
+ * extracted.brandName = "STONE'S THROW"     application.brandName = "Stone's Throw."
+ * -> pass = true, reason shows both raw values plus "minor formatting difference only"
+ *
+ * Case 2: Alcohol content — suffix text, case, and missing period should still pass
+ * extracted.alcoholContent = "46% alc./vol."     application.alcoholContent = "46%"
+ * -> extractAbvPercent gives 46 and 46 -> pass = true
+ *
+ * Case 3: Alcohol content — a genuinely different percentage must still fail
+ * extracted.alcoholContent = "13.5% ALCOHOL BY VOLUME"     application.alcoholContent = "14.0%"
+ * -> extractAbvPercent gives 13.5 and 14 -> pass = false, reason shows both raw values and parsed percentages
+ *
+ * Case 4: Government warning mismatch (unchanged) should fail
+ * If extracted.governmentWarningText differs by even one character from CANONICAL_GOVERNMENT_WARNING,
+ * governmentWarningText.pass = false.
  */

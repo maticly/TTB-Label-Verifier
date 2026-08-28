@@ -53,9 +53,9 @@ export default function Home() {
   const downloadCsvTemplate = () => {
     const headers = ['filename', 'brandName', 'classType', 'alcoholContent', 'netContents', 'governmentWarningText', 'governmentWarningFormatted'];
     const exampleRows = [
-      ['label1.jpg', 'Example Brand', 'Table Wine', '13.5% ALCOHOL BY VOLUME', '750 mL', '', 'false'],
-      ['label2.jpg', 'Another Brand', 'Distilled Spirits', '40% ALCOHOL BY VOLUME', '1 L', '', 'false'],
-      ['label3.jpg', 'Third Brand', 'Malt Beverage', '5.0% ALCOHOL BY VOLUME', '12 oz', '', 'false'],
+      ['label1.jpg', 'Malt & Hop Brewery', 'Ale with Honey and Huckleberry Flavor',	'5% ALC./VOL.',	'1 PINT 0.9 FL. OZ.', '', 'false'],
+      ['label2.jpg', '12345 Imports', 'Rum with Coconut Liqueur', '18% ALC/VOL.', '200 ML', '', 'false'],
+      ['label3.jpg', 'ABC WINERY', 'American Red Wine', 'ALC. 13% BY VOL.', '750 ML', '', 'false'],
     ];
     const csvContent = [headers, ...exampleRows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
